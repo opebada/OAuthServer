@@ -9,6 +9,12 @@ using System.Threading.Tasks;
 
 namespace Application.Authorization.ParameterValidation
 {
+    /// <summary>
+    /// TODO: Add logs
+    /// </summary>
+    /// <param name="clientRepository"></param>
+    /// <param name="scopeRepository"></param>
+    /// <param name="logger"></param>
     public class AuthorizationParameterValidator(IClientRepository clientRepository, IScopeRepository scopeRepository, ILogger<AuthorizationParameterValidator> logger) : IAuthorizationParameterValidator
     {
         private IClientRepository _clientRepository = clientRepository;

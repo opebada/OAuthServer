@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Application.Parameters
+namespace Application.Authorization.ParameterValidation
 {
     public class ResponseType
     {

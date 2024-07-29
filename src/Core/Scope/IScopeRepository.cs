@@ -10,7 +10,7 @@ namespace Core.Scope
     {
         Task<Scope> Create(Scope scope);
         Task<Scope> GetByName(string name);
-        Task<IEnumerable<Scope>> GetMany(string[] scopes);
+        Task<IEnumerable<Scope>> GetScopes(string[] scopes);
         Task<IEnumerable<Scope>> GetAllScopes();
         Task<Scope> Update(Scope scope);
         Task<bool> Delete(string name);

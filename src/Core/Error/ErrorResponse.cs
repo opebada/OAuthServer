@@ -3,12 +3,13 @@ using System.Reflection.Metadata.Ecma335;
 
 namespace Core.Error
 {
-    public class ErrorResponse(string error, string errorDescription, string errorUri = "") : IEquatable<ErrorResponse>
+    public class ErrorResponse(string code, string description, string uri = "") : IEquatable<ErrorResponse>
     {
-        public string Error { get;} = error;
-        public string ErrorDescription { get; } = errorDescription;
-        public string ErrorUri { get; } = errorUri;
+        public static ErrorResponse None = new(string.Empty, string.Empty);
+        public string Code { get;} = code;
+        public string Description { get; } = description;
+        public string Uri { get; } = uri;
 
-        public bool Equals(ErrorResponse? other) => (Error == other?.Error && ErrorDescription == other.ErrorDescription) ? true : false;
+        public bool Equals(ErrorResponse? other) => (Code == other?.Code && Description == other.Description) ? true : false;
     }
 }

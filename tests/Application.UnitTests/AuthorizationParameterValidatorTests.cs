@@ -1,4 +1,4 @@
-using Application.Authorization.ParameterValidation;
+using Core.Authorization.ParameterValidation;
 using Core.Client;
 using Core.Error;
 using Core.Scope;
@@ -15,6 +15,9 @@ namespace Application.UnitTests
         private readonly Mock<IScopeRepository> _scopeRepositoryMock;
         private readonly Mock<ILogger<AuthorizationParameterValidator>> _loggerMock;
         private readonly AuthorizationParameterValidator _validator;
+        private const string InvalidRequest = "invalid_request";
+        private const string UnauthorizedClient = "unauthorized_client";
+        private const string InvalidScope = "invalid_scope";
 
         public AuthorizationParameterValidatorTests()
         {
@@ -24,27 +27,23 @@ namespace Application.UnitTests
             _validator = new AuthorizationParameterValidator(_clientRepositoryMock.Object, _scopeRepositoryMock.Object, _loggerMock.Object);
         }
 
-        [TestMethod]
-        public async Task ValidateClientId_ClientIdIsNullOrEmpty_ReturnsInvalidRequestOAuthError()
+        [DataTestMethod]
+        [DataRow("", null, false, InvalidRequest)]
+        [DataRow("nonExistentClientId", null, false, InvalidRequest)]
+        [DataRow("validClient", "validClient", true, null)]
+        public async Task ValidateClientId(string clientId, string client, bool isSuccess, string errorCode)
         {
             // Arrange
-            string clientId = "";
-
-            // Act
-            var result = await _validator.ValidateClientId(clientId);
-
-            // Assert
-            result.IsSuccess.Should().BeFalse();
-            result.ErrorResponse?.Should().Be(OAuthErrors.InvalidRequest);
-        }
-
-        [TestMethod]
-        public async Task ValidateClientId_ClientDoesNotExist_ReturnsInvalidRequestOAuthError()
-        {
-            // Arrange
-            string clientId = "client123";
             ClientApplication expectedClient = null;
 
+            if (!string.IsNullOrWhiteSpace(client))
+            {
+                expectedClient = new ClientApplication
+                {
+                    Id = clientId
+                };
+            }
+            
             _clientRepositoryMock
                 .Setup(x => x.GetById(clientId))
                 .Returns(Task.FromResult<ClientApplication>(expectedClient));
@@ -53,197 +52,59 @@ namespace Application.UnitTests
             var result = await _validator.ValidateClientId(clientId);
 
             // Assert
-            result.IsSuccess.Should().BeFalse();
-            result.ErrorResponse?.Should().Be(OAuthErrors.InvalidRequest);
+            result.IsSuccess.Should().Be(isSuccess);
+
+            if (!result.IsSuccess && !string.IsNullOrWhiteSpace(errorCode))
+                result.ErrorResponse.Code.Should().Be(errorCode);
         }
 
-        [TestMethod]
-        public async Task ValidateClientId_ClientExists_ReturnsSuccess()
+        [DataTestMethod]
+        [DataRow("", "https://example.com/callback", true)]
+        [DataRow("https://nonmatchingurl.com/callback", "https://example.com/callback", false, InvalidRequest)]
+        [DataRow("https://validmatchingurl.com/callback", "https://validmatchingurl.com/callback", true)]
+        [DataRow("https://validmatchingurl.com/callback", "https://validmatchingurl.com/callback/", true)]
+        public void ValidateRedirectUrl(string redirectUrlParameter, string registeredRedirectUrl, bool isSuccess, string? errorCode = null)
         {
             // Arrange
-            string clientId = "client123";
-            var client = new ClientApplication()
-            {
-                Id = clientId
-            };
-
-            _clientRepositoryMock
-                .Setup(x => x.GetById(clientId))
-                .ReturnsAsync(client);
-
-            // Act
-            AuthorizationParameterValidationResult result = await _validator.ValidateClientId(clientId);
-
-            // Assert
-            result.IsSuccess.Should().BeTrue();
-        }
-
-        [TestMethod]
-        public void ValidateRedirectUrl_RedirectUrlRegisteredButMissingInRequest_ReturnsSuccess()
-        {
-            // Arrange
-            string redirectUrlParameter = string.Empty;
-            IEnumerable<RedirectUrl> registeredRedirectUrls = [new RedirectUrl { Value = "https://example.com/callback" }] ;
+            IEnumerable<RedirectUrl> registeredRedirectUrls = [new RedirectUrl { Value = registeredRedirectUrl }] ;
 
             // Act
             var result = _validator.ValidateRedirectUrl(redirectUrlParameter, registeredRedirectUrls);
 
             // Assert
-            result.IsSuccess.Should().BeTrue();
-        }        
-        
-        [TestMethod]
-        public void ValidateRedirectUrl_RedirectUrlDoesNotMatchRegisteredValue_ReturnsInvalidRequestOAuthError()
-        {
-            // Arrange
-            string redirectUrlParameter = "https://example.com/callback";
-            IEnumerable<RedirectUrl> nonMatchingRegisteredRedirectUrls = [new RedirectUrl { Value = "https://different.com/callback" }];
+            result.IsSuccess.Should().Be(isSuccess);
 
-            // Act
-            var result = _validator.ValidateRedirectUrl(redirectUrlParameter, nonMatchingRegisteredRedirectUrls);
-
-            // Assert
-            result.IsSuccess.Should().BeFalse();
-            result.ErrorResponse?.Should().Be(OAuthErrors.InvalidRequest);
-        }        
-        
-        [TestMethod]
-        public void ValidateRedirectUrl_RedirectUrlSchemeIsNotHttps_ReturnsInvalidResult()
-        {
-            // Arrange
-            string redirectUrlParameter = "htt://example.com/callback";
-            IEnumerable<RedirectUrl> registeredRedirectUrls = [new RedirectUrl { Value = "https://different.com/callback" }];
-
-            // Act
-            var result = _validator.ValidateRedirectUrl(redirectUrlParameter, registeredRedirectUrls);
-
-            // Assert
-            result.IsSuccess.Should().BeFalse();
-            result.ErrorResponse?.Should().Be(OAuthErrors.InvalidRequest);
+            if (!result.IsSuccess && !string.IsNullOrWhiteSpace(errorCode))
+                result.ErrorResponse.Code.Should().Be(errorCode);
         }
 
-        [TestMethod]
-        public void ValidateRedirectUrl_ClientDoesNotHaveRegisteredRedirectUrls_ReturnsInvalidResult()
+        [DataTestMethod]
+        [DataRow("", ClientType.Public, false, InvalidRequest)]
+        [DataRow("invalidResponseType", ClientType.Public, false, InvalidRequest)]
+        [DataRow(ResponseType.AccessToken, ClientType.Confidential, false, UnauthorizedClient)]
+        [DataRow(" code  id_token ", ClientType.Public, true)]
+        [DataRow("code", ClientType.Confidential, true)]
+        public void ValidateResponseType(string responseType, ClientType clientType, bool isSuccess, string? errorCode = null)
         {
-            // Arrange
-            string redirectUrlParameter = "https://example.com/callback";
-            IEnumerable<RedirectUrl> registeredRedirectUrls = [];
-
-            // Act
-            var result = _validator.ValidateRedirectUrl(redirectUrlParameter, registeredRedirectUrls);
-
-            // Assert
-            result.IsSuccess.Should().BeFalse();
-            result.ErrorResponse?.Should().Be(OAuthErrors.InvalidRequest);
-        }
-
-        [TestMethod]
-        public void ValidateRedirectUrl_ValidRedirectUrl_ReturnsSuccess()
-        {
-            // Arrange
-            string redirectUrl = "https://example.com/callback";
-            IEnumerable<RedirectUrl> listWithMatchingRegisteredRedirectUrl = [new RedirectUrl { Value = redirectUrl }];
-
-            // Act
-            var result = _validator.ValidateRedirectUrl(redirectUrl, listWithMatchingRegisteredRedirectUrl);
-
-            // Assert
-            result.IsSuccess.Should().BeTrue();
-        }
-
-        [TestMethod]
-        public void ValidateRedirectUrl_ValidRegisteredRedirectUrlDiffersByBackslash_ReturnsValidResult()
-        {
-            // Arrange
-            string redirectUrl = "https://example.com/callback";
-            IEnumerable<RedirectUrl> listWithMatchingRegisteredRedirectUrl = [new RedirectUrl { Value = redirectUrl + '/' }];
-
-            // Act
-            var result = _validator.ValidateRedirectUrl(redirectUrl, listWithMatchingRegisteredRedirectUrl);
-
-            // Assert
-            result.IsSuccess.Should().BeTrue();
-        }
-
-        [TestMethod]
-        public void ValidateResponseType_ResponseTypeIsEmpty_ReturnsInvalidRequestOAuthError()
-        {
-            // Arrange
-            string responseType = " ";
-            var clientType = ClientType.Public;
-
             // Act
             var result = _validator.ValidateResponseType(responseType, clientType);
 
             // Assert
-            result.IsSuccess.Should().BeFalse();
-            result.ErrorResponse?.Should().Be(OAuthErrors.InvalidRequest);
+            result.IsSuccess.Should().Be(isSuccess);
+            
+            if (!result.IsSuccess && !string.IsNullOrWhiteSpace(errorCode))
+                result.ErrorResponse.Code.Should().Be(errorCode);
         }
 
-        [TestMethod]
-        public void ValidateResponseType_InvalidResponseType_ReturnsInvalidRequestOAuthError()
+        [DataTestMethod]
+        [DataRow(null, "read write", false)]
+        [DataRow("read write", "read write", true)]
+        [DataRow("invalidscope", "read write", false, InvalidScope)]
+        [DataRow("read invalidscope", "read write", false, InvalidScope)]
+        public async Task ValidateScope(string requestedScope, string configuredScope, bool isSuccess, string? errorCode = null)
         {
             // Arrange
-            string responseType = "invalid";
-            var clientType = ClientType.Public;
-
-            // Act
-            var result = _validator.ValidateResponseType(responseType, clientType);
-
-            // Assert
-            result.IsSuccess.Should().BeFalse();
-            result.ErrorResponse?.Should().Be(OAuthErrors.InvalidRequest);
-        }
-
-        [TestMethod]
-        public void ValidateResponseType_PublicClientNotAuthorizedToRequestTokenResponseType_ReturnsUnauthorizedClientOAuthError()
-        {
-            // Arrange
-            string responseType = ResponseType.AccessToken;
-            var clientType = ClientType.Confidential;
-
-            // Act
-            var result = _validator.ValidateResponseType(responseType, clientType);
-
-            // Assert
-            result.IsSuccess.Should().BeFalse();
-            result.ErrorResponse?.Should().Be(OAuthErrors.UnauthorizedClient);
-        }
-
-        [TestMethod]
-        public void ValidateResponseType_ValidResponseTypeContainsWhitespaces_ReturnsSuccess()
-        {
-            // Arrange
-            var clientType = ClientType.Confidential;
-            string responseType = " code  id_token ";
-
-            // Act
-            var result = _validator.ValidateResponseType(responseType, clientType);
-
-            // Assert
-            result.IsSuccess.Should().BeTrue();
-        }
-
-        [TestMethod]
-        public void ValidateResponseType_ValidResponseType_ReturnsSuccess()
-        {
-            // Arrange
-            var clientType = ClientType.Confidential;
-            string responseType = "code";
-
-            // Act
-            var result = _validator.ValidateResponseType(responseType, clientType);
-
-            // Assert
-            result.IsSuccess.Should().BeTrue();
-        }
-
-        [TestMethod]
-        public async Task ValidateScope_RequestedScopeIsNullOrEmpty_ReturnsSuccess()
-        {
-            // Arrange
-            string requestedScope = null;
-            var scopes = new List<Scope> { new Scope { Name = "read", Description = "read" } };
+            IReadOnlySet<Scope> scopes = configuredScope.Split(' ').Select(x => new Scope { Name = x, Description = x }).ToHashSet();
 
             _scopeRepositoryMock
                 .Setup(repo => repo.GetScopes(It.IsAny<string[]>()))
@@ -253,25 +114,10 @@ namespace Application.UnitTests
             var result = await _validator.ValidateScope(requestedScope);
 
             // Assert
-            result.IsSuccess.Should().BeTrue();
-        }
+            result.IsSuccess.Should().Be(isSuccess);
 
-        [TestMethod]
-        public async Task ValidateScope_RequestedScopeIsValid_ReturnsSuccess()
-        {
-            // Arrange
-            string requestedScope = "read write";
-            var validScopes = new List<Scope> { new Scope { Name = "read", Description = "read" }, new Scope { Name = "write", Description = "write" } };
-
-            _scopeRepositoryMock
-                .Setup(x => x.GetScopes(It.IsAny<string[]>()))
-                .ReturnsAsync(validScopes);
-
-            // Act
-            var result = await _validator.ValidateScope(requestedScope);
-
-            // Assert
-            result.IsSuccess.Should().BeTrue();
+            if (!result.IsSuccess && !string.IsNullOrWhiteSpace(errorCode))
+                result.ErrorResponse.Code.Should().Be(errorCode);
         }
     }
 

@@ -1,7 +1,7 @@
 ﻿using Core.Error;
 using System;
 
-namespace Application.Authorization.ParameterValidation
+namespace Core.Authorization.ParameterValidation
 {
     public class AuthorizationParameterValidationResult
     {

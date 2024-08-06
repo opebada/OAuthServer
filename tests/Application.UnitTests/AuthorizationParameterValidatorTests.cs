@@ -1,6 +1,6 @@
+using Core.Authorization;
 using Core.Authorization.ParameterValidation;
 using Core.Client;
-using Core.Error;
 using Core.Scope;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
@@ -97,7 +97,7 @@ namespace Application.UnitTests
         }
 
         [DataTestMethod]
-        [DataRow(null, "read write", false)]
+        [DataRow(null, "read write", true)]
         [DataRow("read write", "read write", true)]
         [DataRow("invalidscope", "read write", false, InvalidScope)]
         [DataRow("read invalidscope", "read write", false, InvalidScope)]

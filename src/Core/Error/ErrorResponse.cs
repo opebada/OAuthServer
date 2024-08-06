@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Reflection.Metadata.Ecma335;
 
 namespace Core.Error
 {
@@ -10,6 +9,6 @@ namespace Core.Error
         public string Description { get; } = description;
         public string Uri { get; } = uri;
 
-        public bool Equals(ErrorResponse? other) => (Code == other?.Code && Description == other.Description) ? true : false;
+        public bool Equals(ErrorResponse? other) => Code == other?.Code && Description == other.Description;
     }
 }

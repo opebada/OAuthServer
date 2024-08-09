@@ -6,8 +6,8 @@ namespace Core.Authorization.ParameterValidation;
 
 public interface IAuthorizationParameterValidator
 {
-    Task<AuthorizationParameterValidationResult> ValidateClientId(string clientId);
-    AuthorizationParameterValidationResult ValidateRedirectUrl(string redirectUrl, IEnumerable<RedirectUrl> registeredRedirectUrls);
-    AuthorizationParameterValidationResult ValidateResponseType(string responseType, ClientType clientType);
-    Task<AuthorizationParameterValidationResult> ValidateScope(string scope);
+    Task<Result<bool>> ValidateClientId(string clientId);
+    Result<bool> ValidateRedirectUrl(string redirectUrl, ClientApplication clientApplication);
+    Result<bool> ValidateResponseType(string responseType, ClientApplication clientApplication);
+    Task<Result<bool>> ValidateScope(string scope);
 }

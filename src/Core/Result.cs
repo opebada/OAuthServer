@@ -27,7 +27,7 @@ public readonly struct Result<T>
         Success
     }
 
-    public T Value { get; }
+    public T? Value { get; }
     
     public bool IsSuccess => _state == ResultState.Success;
     public bool IsFailure => _state == ResultState.Failure;

@@ -14,7 +14,7 @@ public class AuthorizationParameterValidator(IClientRepository clientRepository,
     private IClientRepository _clientRepository = clientRepository;
     private IScopeRepository _scopeRepository = scopeRepository;
     private ILogger<AuthorizationParameterValidator> _logger = logger;
-    private readonly HashSet<string> _responseTypes = [ResponseType.Code, ResponseType.AccessToken, ResponseType.IdToken, ResponseType.None];
+    private readonly HashSet<string> _oauthResponseTypes = [ResponseType.Code, ResponseType.AccessToken, ResponseType.IdToken, ResponseType.None];
 
     public async Task<Result<bool>> ValidateClientId(string clientId)
     {
@@ -35,15 +35,17 @@ public class AuthorizationParameterValidator(IClientRepository clientRepository,
         return true;
     }
 
-    public Result<bool> ValidateRedirectUrl(string redirectUrl, IEnumerable<RedirectUrl> registeredRedirectUrls)
+    public Result<bool> ValidateRedirectUrl(string redirectUrl, ClientApplication client)
     {
-        if (registeredRedirectUrls == null || registeredRedirectUrls.Count() == 0)
+        ArgumentNullException.ThrowIfNull(client);
+
+        if (client.RedirectUrls == null || client.RedirectUrls.Count() == 0)
         {
-            _logger.LogDebug("The redirectUrl is empty");
+            _logger.LogDebug("There are no registered redirect urls");
             return OAuthErrors.InvalidRequest;
         }
 
-        if (string.IsNullOrWhiteSpace(redirectUrl) && registeredRedirectUrls?.Count() == 1)
+        if (string.IsNullOrWhiteSpace(redirectUrl) && client.RedirectUrls.Count() == 1)
         {
             _logger.LogInformation("RedirectUrl is empty in request but client has a redirectUrl");
             return true;
@@ -55,7 +57,7 @@ public class AuthorizationParameterValidator(IClientRepository clientRepository,
             return OAuthErrors.InvalidRequest;
         }
 
-        bool urlIsRegistered = registeredRedirectUrls.Any(x => x.Value.TrimEnd('/').Equals(redirectUrl, StringComparison.OrdinalIgnoreCase));
+        bool urlIsRegistered = client.RedirectUrls.Any(x => string.Equals(x.Value.TrimEnd('/'), redirectUrl, StringComparison.OrdinalIgnoreCase));
 
         if (!string.IsNullOrWhiteSpace(redirectUrl) && urlIsRegistered)
         {
@@ -67,23 +69,25 @@ public class AuthorizationParameterValidator(IClientRepository clientRepository,
         return OAuthErrors.InvalidRequest;
     }
 
-    public Result<bool> ValidateResponseType(string responseType, ClientType clientType)
+    public Result<bool> ValidateResponseType(string requestedResponseType, ClientApplication client)
     {
-        if (string.IsNullOrWhiteSpace(responseType))
+        if (string.IsNullOrWhiteSpace(requestedResponseType))
         {
             _logger.LogDebug("ResponseType is empty");
             return OAuthErrors.InvalidRequest;
         }
 
-        IEnumerable<string> responseTypes = responseType.Trim(' ').Split(' ').Where(x => !string.IsNullOrWhiteSpace(x));
+        ArgumentNullException.ThrowIfNull(client);
 
-        if (!_responseTypes.IsSupersetOf(responseTypes))
+        IEnumerable<string> responseTypes = requestedResponseType.Trim(' ').Split(' ').Where(x => !string.IsNullOrWhiteSpace(x));
+
+        if (!_oauthResponseTypes.IsSupersetOf(responseTypes))
         {
             _logger.LogDebug("Invalid response type {ResponseTypes}", responseTypes);
             return OAuthErrors.InvalidRequest;
         }
 
-        if (clientType == ClientType.Confidential && responseTypes.Contains(ResponseType.AccessToken)) // check this out
+        if (client.ClientType == ClientType.Confidential && responseTypes.Contains(ResponseType.AccessToken))
         {
             _logger.LogDebug("Client is unauthorized to request 'token' response type");
             return OAuthErrors.UnauthorizedClient;
@@ -97,7 +101,7 @@ public class AuthorizationParameterValidator(IClientRepository clientRepository,
     {
         if (string.IsNullOrWhiteSpace(scope))
         {
-            _logger.LogInformation("Scope is empty but allows gives basic information in token");
+            _logger.LogInformation("Scope is empty but allows basic information in token");
             return true;
         }
 

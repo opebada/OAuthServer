@@ -28,10 +28,10 @@ namespace Application.UnitTests
         }
 
         [DataTestMethod]
-        [DataRow("", null, false, InvalidRequest)]
-        [DataRow("nonExistentClientId", null, false, InvalidRequest)]
-        [DataRow("validClient", "validClient", true, null)]
-        public async Task ValidateClientId(string clientId, string client, bool isSuccess, string errorCode)
+        [DataRow("", null, false, InvalidRequest, DisplayName = "EmptyClientId_ReturnsInvalidRequest")]
+        [DataRow("nonExistentClientId", null, false, InvalidRequest, DisplayName = "NonExistentClientId_ReturnsInvalidRequest")]
+        [DataRow("validClient", "validClient", true, DisplayName = "ValidClientId_ReturnsTrue")]
+        public async Task ValidateClientId(string clientId, string client, bool isSuccess, string? errorCode = null)
         {
             // Arrange
             ClientApplication expectedClient = null;
@@ -58,18 +58,41 @@ namespace Application.UnitTests
                 result.ErrorResponse.Code.Should().Be(errorCode);
         }
 
+        [TestMethod]
+        public void ValidateRedirectUrl_ClientIsNull_ThrowsArgumentNullException()
+        {
+            // Arrange
+            string redirectUrlParameter = "https://e.com/callback";
+            ClientApplication client = null;
+
+            // Act
+            Action action = () => {
+                var result = _validator.ValidateRedirectUrl(redirectUrlParameter, client);
+            };
+
+            // Assert
+            action.Should().Throw<ArgumentNullException>();
+        }
+
         [DataTestMethod]
-        [DataRow("", "https://example.com/callback", true)]
-        [DataRow("https://nonmatchingurl.com/callback", "https://example.com/callback", false, InvalidRequest)]
-        [DataRow("https://validmatchingurl.com/callback", "https://validmatchingurl.com/callback", true)]
-        [DataRow("https://validmatchingurl.com/callback", "https://validmatchingurl.com/callback/", true)]
+        [DataRow("", "", false, InvalidRequest, DisplayName = "ClientWithNoRedirectUrl_ReturnsInvalidRequest")]
+        [DataRow("", "https://e.com/callback", true, DisplayName = "EmptyRedirectUrl_ButClientHasRedirectUrl_ReturnsTrue")]
+        [DataRow("https://n.com/callback", "https://e.com/callback", false, InvalidRequest, DisplayName = "RedirectUrlDoesNotMatchClientRedirectUrl_ReturnsInvalidRequest")]
+        [DataRow("https://v.com/callback", "https://v.com/callback", true, DisplayName = "RedirectUrlMatchesClientRedirectUrl_ReturnsTrue")]
+        [DataRow("//invalid.com/callback", "https://v.com/callback/", false, InvalidRequest, DisplayName = "RedirectUrlIsInvalidUri_ReturnsInvalidRequest")]
         public void ValidateRedirectUrl(string redirectUrlParameter, string registeredRedirectUrl, bool isSuccess, string? errorCode = null)
         {
             // Arrange
-            IEnumerable<RedirectUrl> registeredRedirectUrls = [new RedirectUrl { Value = registeredRedirectUrl }] ;
+            var client = new ClientApplication { Id = "client123" };;
+
+            if (!string.IsNullOrWhiteSpace(registeredRedirectUrl))
+            {
+                IEnumerable<RedirectUrl> registeredRedirectUrls = [new RedirectUrl { Value = registeredRedirectUrl }] ;
+                client.RedirectUrls = registeredRedirectUrls;
+            }
 
             // Act
-            var result = _validator.ValidateRedirectUrl(redirectUrlParameter, registeredRedirectUrls);
+            var result = _validator.ValidateRedirectUrl(redirectUrlParameter, client);
 
             // Assert
             result.IsSuccess.Should().Be(isSuccess);
@@ -78,16 +101,35 @@ namespace Application.UnitTests
                 result.ErrorResponse.Code.Should().Be(errorCode);
         }
 
+        [TestMethod]
+        public void ValidateResponseType_ClientIsNull_ThrowsArgumentNullException()
+        {
+            // Arrange
+            string requestedResponseType = "https://e.com/callback";
+            ClientApplication client = null;
+
+            // Act
+            Action action = () => {
+                var result = _validator.ValidateResponseType(requestedResponseType, client);
+            };
+
+            // Assert
+            action.Should().Throw<ArgumentNullException>();
+        }
+
         [DataTestMethod]
-        [DataRow("", ClientType.Public, false, InvalidRequest)]
-        [DataRow("invalidResponseType", ClientType.Public, false, InvalidRequest)]
-        [DataRow(ResponseType.AccessToken, ClientType.Confidential, false, UnauthorizedClient)]
-        [DataRow(" code  id_token ", ClientType.Public, true)]
-        [DataRow("code", ClientType.Confidential, true)]
+        [DataRow("", ClientType.Public, false, InvalidRequest, DisplayName = "EmptyResponseType_ReturnsInvalidRequest")]
+        [DataRow("invalidResponseType", ClientType.Public, false, InvalidRequest, DisplayName = "InvalidResponseType_ReturnsInvalidRequest")]
+        [DataRow(ResponseType.AccessToken, ClientType.Confidential, false, UnauthorizedClient, DisplayName = "ConfidentialClientRequestsTokenResponseType_ReturnsUnauthorizedClient")]
+        [DataRow(" code  id_token ", ClientType.Public, true, DisplayName = "ResponseTypeWithWhitespaces_ReturnsTrue")]
+        [DataRow("code", ClientType.Confidential, true, DisplayName = "ResponseTypeWithoutWhitespaces_ReturnsTrue")]
         public void ValidateResponseType(string responseType, ClientType clientType, bool isSuccess, string? errorCode = null)
         {
+            // Arrange
+            var client = new ClientApplication { ClientType = clientType};
+
             // Act
-            var result = _validator.ValidateResponseType(responseType, clientType);
+            var result = _validator.ValidateResponseType(responseType, client);
 
             // Assert
             result.IsSuccess.Should().Be(isSuccess);
@@ -97,10 +139,10 @@ namespace Application.UnitTests
         }
 
         [DataTestMethod]
-        [DataRow(null, "read write", true)]
-        [DataRow("read write", "read write", true)]
-        [DataRow("invalidscope", "read write", false, InvalidScope)]
-        [DataRow("read invalidscope", "read write", false, InvalidScope)]
+        [DataRow(null, "read write", true, DisplayName = "EmptyRequestScope_ReturnsTrue")]
+        [DataRow("read write", "read write", true, DisplayName = "ValidRequestScope_ReturnsTrue")]
+        [DataRow("UnrecognizedScope", "read write", false, InvalidScope, DisplayName = "UnrecognizedScope_ReturnsInvalidScope")]
+        [DataRow("read UnrecognizedScope", "read write", false, InvalidScope, DisplayName = "UnrecognizedScopeWithValidScope_ReturnsInvalidScope")]
         public async Task ValidateScope(string requestedScope, string configuredScope, bool isSuccess, string? errorCode = null)
         {
             // Arrange

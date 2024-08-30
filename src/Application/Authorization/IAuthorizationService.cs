@@ -1,12 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using System.Collections.Specialized;
 using System.Threading.Tasks;
+using Core;
+using Core.Authorization;
 
 namespace Application.Authorization
 {
     public interface IAuthorizationService
     {
-        Task<AuthorizationRequestValidationResult> VerifyRequest(AuthorizationRequest authorizationRequest);
+        Task<AuthorizationResult> ValidateRequest(NameValueCollection requestParameters);
     }
 }

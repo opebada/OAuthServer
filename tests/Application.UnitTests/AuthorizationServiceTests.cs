@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Specialized;
 using Application.Authorization;
 using Core;
 using Core.Authorization;
@@ -24,6 +22,15 @@ public class AuthorizationServiceTests
             _authorizationService = new AuthorizationService(_mockAuthorizationParameterValidator.Object);
         }
 
+        public enum RequestValidationState
+        {
+            None,
+            ClientIdIsValid,
+            RedirectUriIsValid,
+            ResponseTypeIsValid,
+            ScopeIsValid
+        }
+
         [TestMethod]
         public async Task ValidateRequest_NullRequestParameters_ThrowsArgumentNullException()
         {
@@ -32,39 +39,31 @@ public class AuthorizationServiceTests
             await func.Should().ThrowAsync<ArgumentNullException>();
         }
 
-        // TODO: use that state machine thing
-        // Next steps: AI code review
-        // Implement changes
         [DataTestMethod]
-        [DataRow(false, false, false, false, Code.InvalidRequest, DisplayName = "InvalidClientId_ReturnsInvalidRequestError")]
-        [DataRow(true, false, false, false, Code.InvalidRequest, DisplayName = "InvalidRedirectUrl_ReturnsInvalidRequestError")]
-        [DataRow(true, true, false, false, Code.UnsupportedResponseType, DisplayName = "InvalidResponseType_ReturnsUnsupportedResponseTypeError")]
-        [DataRow(true, true, true, false, Code.InvalidScope, DisplayName = "InvalidScope_ReturnsInvalidScopeError")]
-        [DataRow(true, true, true, true, DisplayName = "AllParametersAreValid_ReturnsEmptyErrorResponse")]
-        public async Task ValidateRequest_ShouldReturnCorrectResult(bool clientIsValid, bool redirectUriIsValid, 
-        bool responseTypeIsValid, bool scopeIsValid, string errorCode = "")
+        [DataRow(RequestValidationState.None, Code.InvalidRequest, DisplayName = "InvalidClientId_ReturnsInvalidRequestError")]
+        [DataRow(RequestValidationState.ClientIdIsValid, Code.InvalidRequest, DisplayName = "InvalidRedirectUrl_ReturnsInvalidRequestError")]
+        [DataRow(RequestValidationState.RedirectUriIsValid, Code.UnsupportedResponseType, DisplayName = "InvalidResponseType_ReturnsUnsupportedResponseTypeError")]
+        [DataRow(RequestValidationState.ResponseTypeIsValid, Code.InvalidScope, DisplayName = "InvalidScope_ReturnsInvalidScopeError")]
+        [DataRow(RequestValidationState.ScopeIsValid, DisplayName = "AllParametersAreValid_ReturnsEmptyErrorResponse")]
+        public async Task ValidateRequest_ShouldReturnCorrectResult(RequestValidationState validationState, string errorCode = "")
         {
             // Arrange
-            string clientId = "clientId123";
-            string redirectUrl = "https://www.example.com/callback";
-            string responseType = ResponseType.Code;
-            string scope = "openid";
-            var requestParameters = new NameValueCollection
+            var authorizationRequest = new AuthorizationRequest
             {
-                { "client_id", clientId },
-                { "redirect_uri", redirectUrl },
-                { "response_type", responseType },
-                { "scope", scope },
+                ClientId = "clientId123",
+                RedirectUri = "https://www.example.com/callback",
+                ResponseType = ResponseType.Code,
+                Scope = "openid",
+                State = ""
             };
 
-            SetupSuccessfulClientValidationResult(clientIsValid);
-            SetupSuccessfulRedirectUriValidationResult(redirectUriIsValid);
-
-            SetupSuccessfulResponseTypeValidationResult(responseTypeIsValid);
-            SetupSuccessfulScopeValidationResult(scopeIsValid);
+            SetupSuccessfulClientValidationResult(validationState);
+            SetupSuccessfulRedirectUriValidationResult(validationState);
+            SetupSuccessfulResponseTypeValidationResult(validationState);
+            SetupSuccessfulScopeValidationResult(validationState);
 
             // Act
-            AuthorizationResult result = await _authorizationService.ValidateRequest(requestParameters);
+            AuthorizationResult result = await _authorizationService.ValidateRequest(authorizationRequest);
 
             // Assert
             if (result.IsValid)
@@ -73,9 +72,9 @@ public class AuthorizationServiceTests
                 result.ErrorResponse.Code.Should().Be(errorCode);
         }
 
-        private void SetupSuccessfulClientValidationResult(bool clientIsValid)
+        private void SetupSuccessfulClientValidationResult(RequestValidationState validationState)
         {
-            Result<ClientApplication> clientResult =  clientIsValid 
+            Result<ClientApplication> clientResult =  validationState >= RequestValidationState.ClientIdIsValid  
             ? new Result<ClientApplication>(new ClientApplication())
             : new Result<ClientApplication>(new ErrorResponse(Code.InvalidRequest, Descriptions.InvalidRequest));
 
@@ -84,10 +83,10 @@ public class AuthorizationServiceTests
                 .ReturnsAsync(clientResult);
         }
 
-        private void SetupSuccessfulRedirectUriValidationResult(bool resultIsValid)
+        private void SetupSuccessfulRedirectUriValidationResult(RequestValidationState validationState)
         {
-            var validRedirectUrlResult = resultIsValid 
-            ? new Result<bool>(resultIsValid)
+            var validRedirectUrlResult = validationState >= RequestValidationState.RedirectUriIsValid 
+            ? new Result<bool>(true)
             : new Result<bool>(ErrorResponse.InvalidRequest);
 
             _mockAuthorizationParameterValidator
@@ -95,10 +94,10 @@ public class AuthorizationServiceTests
                 .Returns(validRedirectUrlResult);
         }
 
-        private void SetupSuccessfulResponseTypeValidationResult(bool resultIsValid)
+        private void SetupSuccessfulResponseTypeValidationResult(RequestValidationState validationState)
         {
-            var responseTypeResult = resultIsValid
-            ? new Result<bool>(resultIsValid)
+            var responseTypeResult = validationState >= RequestValidationState.ResponseTypeIsValid
+            ? new Result<bool>(true)
             : new Result<bool>(ErrorResponse.UnsupportedResponseType);
 
             _mockAuthorizationParameterValidator
@@ -106,10 +105,10 @@ public class AuthorizationServiceTests
                 .Returns(responseTypeResult);
         }
 
-        private void SetupSuccessfulScopeValidationResult(bool resultIsValid)
+        private void SetupSuccessfulScopeValidationResult(RequestValidationState validationState)
         {
-            var scopeResult = resultIsValid
-            ? new Result<bool>(resultIsValid)
+            var scopeResult = validationState >= RequestValidationState.ScopeIsValid
+            ? new Result<bool>(true)
             : new Result<bool>(ErrorResponse.InvalidScope);
 
             _mockAuthorizationParameterValidator

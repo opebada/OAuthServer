@@ -7,6 +7,6 @@ namespace Application.Authorization
 {
     public interface IAuthorizationService
     {
-        Task<AuthorizationResult> ValidateRequest(NameValueCollection requestParameters);
+        Task<AuthorizationResult> ValidateRequest(AuthorizationRequest authorizationRequest);
     }
 }

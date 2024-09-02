@@ -18,12 +18,9 @@ public class AuthorizationService : IAuthorizationService
         _authorizationParameterValidator = authorizationParameterValidator;
     }
 
-    public async Task<AuthorizationResult> ValidateRequest(NameValueCollection requestParameters)
+    public async Task<AuthorizationResult> ValidateRequest(AuthorizationRequest authorizationRequest)
     {
-        ArgumentNullException.ThrowIfNull(requestParameters);
-        
-        // perhaps move this up to the controller layer, parameter here should be AuthorizationRequest
-        AuthorizationRequest authorizationRequest = CreateAuthorizationRequest(requestParameters);
+        ArgumentNullException.ThrowIfNull(authorizationRequest);
 
         Result<ClientApplication> clientValidationResult = await _authorizationParameterValidator.ValidateClientId(authorizationRequest.ClientId);
         
@@ -48,21 +45,5 @@ public class AuthorizationService : IAuthorizationService
             return new AuthorizationResult(authorizationRequest, scopeValidationResult.ErrorResponse);
             
         return new AuthorizationResult(authorizationRequest);
-    }
-
-    private AuthorizationRequest CreateAuthorizationRequest(NameValueCollection requestParameters)
-    {
-        var authorizationRequest = new AuthorizationRequest
-        {
-            ClientId = requestParameters["client_id"],
-            RedirectUri = requestParameters["redirect_uri"],
-            ResponseType = requestParameters["response_type"],
-            Scope = requestParameters["scope"],
-            State = requestParameters["state"],
-            CodeChallenge = requestParameters["code_challenge"],
-            CodeChallengeMethod = requestParameters["code_challenge_method"]
-        };
-
-        return authorizationRequest;
     }
 }

@@ -11,17 +11,17 @@ namespace Core.Authorization.ParameterValidation;
 
 public class AuthorizationParameterValidator(IClientRepository clientRepository, IScopeRepository scopeRepository, ILogger<AuthorizationParameterValidator> logger) : IAuthorizationParameterValidator
 {
-    private IClientRepository _clientRepository = clientRepository;
-    private IScopeRepository _scopeRepository = scopeRepository;
-    private ILogger<AuthorizationParameterValidator> _logger = logger;
+    private readonly IClientRepository _clientRepository = clientRepository;
+    private readonly IScopeRepository _scopeRepository = scopeRepository;
+    private readonly ILogger<AuthorizationParameterValidator> _logger = logger;
     private readonly HashSet<string> _oauthResponseTypes = [ResponseType.Code, ResponseType.AccessToken, ResponseType.IdToken, ResponseType.None];
 
-    public async Task<Result<bool>> ValidateClientId(string clientId)
+    public async Task<Result<ClientApplication>> ValidateClientId(string clientId)
     {
         if (string.IsNullOrWhiteSpace(clientId))
         {
             _logger.LogDebug("The clientId is empty");
-            return OAuthErrors.InvalidRequest;
+            return ErrorResponse.InvalidRequest;
         }
 
         ClientApplication client = await _clientRepository.GetById(clientId);
@@ -29,10 +29,10 @@ public class AuthorizationParameterValidator(IClientRepository clientRepository,
         if (client == null)
         {
             _logger.LogDebug("The client with id {clientId} does not exist", clientId);
-            return OAuthErrors.InvalidRequest;
+            return ErrorResponse.InvalidRequest;
         }
         
-        return true;
+        return client;
     }
 
     public Result<bool> ValidateRedirectUrl(string redirectUrl, ClientApplication client)
@@ -42,7 +42,7 @@ public class AuthorizationParameterValidator(IClientRepository clientRepository,
         if (client.RedirectUrls == null || client.RedirectUrls.Count() == 0)
         {
             _logger.LogDebug("There are no registered redirect urls");
-            return OAuthErrors.InvalidRequest;
+            return ErrorResponse.InvalidRequest;
         }
 
         if (string.IsNullOrWhiteSpace(redirectUrl) && client.RedirectUrls.Count() == 1)
@@ -54,7 +54,7 @@ public class AuthorizationParameterValidator(IClientRepository clientRepository,
         if (!Uri.TryCreate(redirectUrl, UriKind.Absolute, out Uri? validRedirectUri) || validRedirectUri.Scheme != Uri.UriSchemeHttps)
         {
             _logger.LogDebug("RedirectUrl {RedirectUrl} is not a valid uri.", redirectUrl);
-            return OAuthErrors.InvalidRequest;
+            return ErrorResponse.InvalidRequest;
         }
 
         bool urlIsRegistered = client.RedirectUrls.Any(x => string.Equals(x.Value.TrimEnd('/'), redirectUrl, StringComparison.OrdinalIgnoreCase));
@@ -66,7 +66,7 @@ public class AuthorizationParameterValidator(IClientRepository clientRepository,
         }
 
         _logger.LogDebug("RedirectUrl is not registered for client");
-        return OAuthErrors.InvalidRequest;
+        return ErrorResponse.InvalidRequest;
     }
 
     public Result<bool> ValidateResponseType(string requestedResponseType, ClientApplication client)
@@ -74,7 +74,7 @@ public class AuthorizationParameterValidator(IClientRepository clientRepository,
         if (string.IsNullOrWhiteSpace(requestedResponseType))
         {
             _logger.LogDebug("ResponseType is empty");
-            return OAuthErrors.InvalidRequest;
+            return ErrorResponse.InvalidRequest;
         }
 
         ArgumentNullException.ThrowIfNull(client);
@@ -84,13 +84,13 @@ public class AuthorizationParameterValidator(IClientRepository clientRepository,
         if (!_oauthResponseTypes.IsSupersetOf(responseTypes))
         {
             _logger.LogDebug("Invalid response type {ResponseTypes}", responseTypes);
-            return OAuthErrors.InvalidRequest;
+            return ErrorResponse.InvalidRequest;
         }
 
         if (client.ClientType == ClientType.Confidential && responseTypes.Contains(ResponseType.AccessToken))
         {
             _logger.LogDebug("Client is unauthorized to request 'token' response type");
-            return OAuthErrors.UnauthorizedClient;
+            return ErrorResponse.UnauthorizedClient;
         }
 
         _logger.LogInformation("Response type is valid");
@@ -107,14 +107,14 @@ public class AuthorizationParameterValidator(IClientRepository clientRepository,
 
         IEnumerable<string> scopes = scope.Split(' ').Select(x => x.Trim(' '));
 
-        HashSet<string> result = (await _scopeRepository.GetScopes(scopes.ToArray())).Select(x => x.Name).ToHashSet();
+        HashSet<string> validScopes = (await _scopeRepository.GetScopes(scopes.ToArray())).Select(x => x.Name).ToHashSet();
 
         foreach (var scopeItem in scopes)
         {
-            if (!result.Contains(scopeItem))
+            if (!validScopes.Contains(scopeItem))
             {
                 _logger.LogDebug("Scope {ScopeItem} is invalid", scopeItem);
-                return OAuthErrors.InvalidScope;
+                return ErrorResponse.InvalidScope;
             }   
         }
 

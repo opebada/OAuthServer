@@ -9,8 +9,8 @@ namespace Core.Client
     {
         Task<ClientApplication> Create(ClientApplication client);
         Task<ClientApplication> GetById(string id);
-        Task<IEnumerable<ClientApplication>> GetAllClients();
-        Task<ClientApplication> Update(ClientApplication client);
+        Task<ICollection<ClientApplication>> GetAllClients();
+        Task<bool> Update(ClientApplication client);
         Task<bool> Delete(string id);
     }
 }

@@ -87,7 +87,7 @@ namespace Application.UnitTests
 
             if (!string.IsNullOrWhiteSpace(registeredRedirectUrl))
             {
-                IEnumerable<RedirectUrl> registeredRedirectUrls = [new RedirectUrl { Value = registeredRedirectUrl }] ;
+                IEnumerable<RedirectUrl> registeredRedirectUrls = [new RedirectUrl { ClientId = "client123", Value = registeredRedirectUrl }] ;
                 client.RedirectUrls = registeredRedirectUrls;
             }
 

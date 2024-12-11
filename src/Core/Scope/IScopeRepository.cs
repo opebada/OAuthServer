@@ -12,7 +12,7 @@ namespace Core.Scope
         Task<Scope> GetByName(string name);
         Task<IEnumerable<Scope>> GetScopes(string[] scopes);
         Task<IEnumerable<Scope>> GetAllScopes();
-        Task<Scope> Update(Scope scope);
+        Task<bool> Update(Scope scope);
         Task<bool> Delete(string name);
     }
 }
